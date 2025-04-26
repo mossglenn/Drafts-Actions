@@ -1,10 +1,13 @@
 // ===== USER SETTINGS =====
 const DEFAULT_ISSUE_TYPE = 'Task'; // Change to "Bug", "Story", etc.
-const INCLUDE_TAGS_AS_LABELS = true; // <-- set this to false to not include draft tags in Jira labels
-const SENT_FROM_DRAFTS_LABEL = 'send-from-drafts'; // <-- change label or set to false to disable
+const INCLUDE_TAGS_AS_LABELS = true; // Set false to disable adding Draft tags as Jira labels
+const SENT_FROM_DRAFTS_LABEL = 'send-from-drafts'; // Change text or set to false to disable adding a "sent-from-drafts" label
+const TAG_AFTER_SEND = 'sent-to-jira'; // change text or set to false to disable adding a tag after sending
+const ARCHIVE_AFTER_SEND = true; // Set false to disable moving the Draft to Archive
 
-const MAIN_CREDENTIAL_NAME = 'jira-basic-auth'; //used when URL cannot be parsed
-const ALT_CREDENTIAL_NAME = 'jira-domain-and-project'; //used when URL cannot be parsed
+const MAIN_CREDENTIAL_NAME = 'jira-basic-auth'; //name of credential with URL, email, and token
+const ALT_CREDENTIAL_NAME = 'jira-domain-and-project'; //used only when URL cannot be parsed
+
 // =========================
 
 // ===== Future Possibilities ===== //
@@ -100,6 +103,18 @@ if (response.statusCode === 403) {
   let t = `${r.key} // ${title} // ${ticketURL}`;
   draft.content = t + '\n\n' + draft.content;
   draft.update();
+
+  // Apply sent tag if enabled
+  if (TAG_AFTER_SEND) {
+    draft.addTag(TAG_AFTER_SEND);
+    draft.update();
+  }
+
+  // Move to archive if enabled
+  if (ARCHIVE_AFTER_SEND) {
+    draft.isArchived = true;
+    draft.update();
+  }
 
   app.displaySuccessMessage('Created ' + r.key + ' in JIRA');
   app.setClipboard(ticketURL);
