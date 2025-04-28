@@ -1,23 +1,32 @@
-/* This script creates a new Jira issue using the Jira REST API. The new issue is created based on the current draft content.
+/* This script uses the current draft to create a new Jira issue via the Jira API.
  * The script requires the following configured values:
- * - jiraDomain: The Jira domain (e.g., yourcompany.atlassian.net)
+ * - jiraSiteURL: The Jira Site URL (e.g., yourcompany.atlassian.net)
  * - jiraProjectKey: The Jira project key (e.g., PROJ)
  * - jiraIssueType: The Jira issue type (e.g., Task, Bug)
  * - includeTagsAsLabels: Whether to include draft tags as Jira labels (default: true)
  * - includeJiraLabel: Whether to include a specific Jira label (default: true)
  * - jiraLabel: The specific Jira label to include (default: 'sent-from-drafts')
- * The script also requires a credential named CREDENTIAL_NAME, which can be reset below. The credential includes:
+ * The script also requires a credential named the value of CREDENTIAL_NAME, which can be reset below. The credential includes:
  * - email: The email address of the Jira user
  * - token: The API token for the Jira user
  * After the new Jira issue is created, the script will prepend teh draft with the Markdown link to the new issue.
  */
 
 // ===== User Settings =====
-const CREDENTIAL_NAME = 'frictionless-to-jira'; //name of credential with email, and token
+const CREDENTIAL_NAME = 'flick-to-jira'; //name of credential with email, and token
 // ========================
 
-const settings = getConfiguredValues();
-
+const settings = context.configuredValues;
+if (!settings.jiraSiteURL || settings.jiraSiteURL === 'undefined') {
+  context.fail(
+    'Missing required settings: jiraSiteURL. Please configure this in the action settings.',
+  );
+}
+if (!settings.jiraProjectKey || settings.jiraProjectKey === 'undefined') {
+  context.fail(
+    'Missing required settings: jiraSiteURL. Please configure this in the action settings.',
+  );
+}
 const jira = {};
 // Use current draft content to construct Jira Issue fields
 const lines = draft.content.trim().split('\n');
@@ -27,12 +36,12 @@ jira.labels = getJiraLabels(draft.tags);
 
 const req = {};
 //construct request values
-req.url = `https://${settings.domain}/rest/api/3/issue`;
+req.url = `https://${settings.jiraSiteURL}/rest/api/3/issue`;
 req.cred = getCredentials();
 req.payloadBody = {
   fields: {
-    project: { key: settings.projectKey },
-    issuetype: { name: settings.issueType },
+    project: { key: settings.jiraProjectKey },
+    issuetype: { name: settings.jiraIssueType },
     summary: jira.summary,
     description: jira.description,
     labels: jira.labels,
@@ -47,21 +56,22 @@ req.headers = {
   'Content-Type': 'application/json',
 };
 
-//see request in consol for debugging
-console.log('Request headers:');
-console.log(JSON.stringify(req.headers, null, 2));
-console.log('Request body:');
-console.log(JSON.stringify(payloadBody, null, 2));
-
-// Make a POST request to the JIRA API to create a new issue
-const http = HTTP.create();
-const response = http.request({
+//Make http request object
+req.settings = {
   method: 'POST',
   url: req.url,
   headers: req.headers,
   data: req.payloadBody,
   timeout: 30.0,
-});
+};
+
+//see request values in consol for debugging
+console.log('Request Settings:');
+console.log(JSON.stringify(req.settings, null, 2));
+
+// Make a POST request to the JIRA API to create a new issue
+const http = HTTP.create();
+const response = http.request(req.settings);
 
 // Log the API response for debugging
 console.log(
@@ -93,46 +103,19 @@ if (response.statusCode === 403) {
 
 //====== functions ======== //
 
-//get Configured Values
-function getConfiguredValues() {
-  const s = {};
-  s.jiraDomain = context.getConfiguredValue('jiraDomain')
-    ? context.getConfiguredValue('jiraDomain')
-    : null;
-  s.jiraProjectKey = context.getConfiguredValue('jiraProjectKey')
-    ? context.getConfiguredValue('jiraProjectKey')
-    : null;
-  s.jiraIssueType = context.getConfiguredValue('jiraIssueType')
-    ? context.getConfiguredValue('jiraIssueType')
-    : 'Task';
-  s.includeTagsAsLabels = context.getConfiguredValue('includeTagsAsLabels')
-    ? context.getConfiguredValue('includeTagsAsLabels')
-    : true;
-  s.includeJiraLabel = context.getConfiguredValue('includeJiraLabel')
-    ? context.getConfiguredValue('includeJiraLabel')
-    : true;
-  s.jiraLabel = context.getConfiguredValue('jiraLabel')
-    ? context.getConfiguredValue('jiraLabel')
-    : 'sent-from-drafts';
-
-  if (!s.jiraDomain || !s.jiraProjectKey) {
-    context.fail('Missing JIRA domain or project key.');
-  }
-  return s;
-}
 // credentials user email, and Atlassian token
 function getCredentials() {
-  const c = Credential.create(
+  const cred = Credential.create(
     CREDENTIAL_NAME,
     'JIRA credentials for ad hoc API calls using an email, and a token',
   );
-  c.addTextField('email', 'Email Address');
-  c.addPasswordField('token', 'API Token');
-  c.authorize(); // This will prompt if not already saved
-  if (c) {
+  cred.addTextField('email', 'Email Address');
+  cred.addPasswordField('token', 'API Token');
+  cred.authorize(); // This will prompt if not already saved
+  if (cred) {
     return {
-      email: c.getValue('email'),
-      token: c.getValue('token'),
+      email: cred.getValue('email'),
+      token: cred.getValue('token'),
     };
   } else {
     context.fail('Failed to get credentials');
@@ -170,8 +153,9 @@ function getJiraLabels(draftTags) {
   }
 
   if (settings.includeJiraLabel) {
+    jiraLabels = settings.jiraLabel.split(',').map((l) => l.trim());
     labels = labels.concat(
-      settings.jiraLabel.toLowerCase().replace(/\s+/g, '-'),
+      jiraLabels.map((l) => l.toLowerCase().replace(/\s+/g, '-')),
     );
   }
   return labels;
