@@ -119,6 +119,6 @@ Use freely, modify freely, just give a little credit if you share. ❤️
 
 # 📥 Quick Install (if published)
 
-> [Install Flick-to-Jira →](#)  
+> [Install Flick-to-Jira →](https://directory.getdrafts.com/a/2YO)  
 
 ---
